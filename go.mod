@@ -214,3 +214,5 @@ require (
 )
 
 replace google.golang.org/protobuf => github.com/lightninglabs/protobuf-go-hex-display v1.30.0-hex-display
+
+replace github.com/elnosh/btc-docker-test => github.com/Amperstrand/btc-docker-test v0.1.1-0.20260504161150-ef8d4d1f2b7a
