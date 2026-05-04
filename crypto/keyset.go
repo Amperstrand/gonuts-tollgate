@@ -9,6 +9,8 @@ import (
 	"math"
 	"slices"
 	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/Origami74/gonuts-tollgate/cashu"
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
@@ -185,6 +187,42 @@ func DeriveKeysetId(keyset PublicKeys) string {
 	hash.Write(keys)
 
 	return "00" + hex.EncodeToString(hash.Sum(nil))[:14]
+}
+
+func DeriveKeysetIdV2(keyset PublicKeys, unit string, inputFeePpk uint) string {
+	type pubkey struct {
+		amount uint64
+		pk     *secp256k1.PublicKey
+	}
+	pubkeys := make([]pubkey, len(keyset))
+	i := 0
+	for amount, key := range keyset {
+		pubkeys[i] = pubkey{amount, key}
+		i++
+	}
+	sort.Slice(pubkeys, func(i, j int) bool {
+		return pubkeys[i].amount < pubkeys[j].amount
+	})
+
+	parts := make([]string, len(pubkeys))
+	for i, key := range pubkeys {
+		parts[i] = strconv.FormatUint(key.amount, 10) + ":" + hex.EncodeToString(key.pk.SerializeCompressed())
+	}
+	var preimage strings.Builder
+	preimage.WriteString(strings.Join(parts, ","))
+	preimage.WriteString("|unit:")
+	preimage.WriteString(unit)
+	if inputFeePpk != 0 {
+		preimage.WriteString("|input_fee_ppk:")
+		preimage.WriteString(strconv.FormatUint(uint64(inputFeePpk), 10))
+	}
+
+	h := sha256.Sum256([]byte(preimage.String()))
+	return "01" + hex.EncodeToString(h[:])
+}
+
+func IsKeysetIdV2(id string) bool {
+	return len(id) > 2 && id[:2] == "01"
 }
 
 // DerivePublic returns the keyset's public keys as

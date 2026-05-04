@@ -60,3 +60,17 @@ jobs:
 
         - name: Wallet Integration Tests 
           run: go test -v --tags=integration ./wallet
+
+    livemint-keyset-tests:
+        runs-on: ubuntu-latest
+        continue-on-error: true
+        steps:
+        - uses: actions/checkout@v4
+
+        - name: Set up Go
+          uses: actions/setup-go@v4
+          with:
+            go-version: 1.23.7
+
+        - name: Live Mint Keyset Tests (V1 + V2)
+          run: go test -v --tags=livemint ./wallet -run "TestGetKeysetKeys_V2|TestGetKeysetKeys_V1|TestGetMintActiveKeyset" -timeout 60s
