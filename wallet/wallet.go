@@ -269,9 +269,12 @@ func (w *Wallet) RequestMint(amount uint64, mint string) (*nut04.PostMintQuoteBo
 		return nil, err
 	}
 
-	bolt11, err := decodepay.Decodepay(mintResponse.Request)
-	if err != nil {
-		return nil, fmt.Errorf("error decoding bolt11 invoice: %v", err)
+	// Decode bolt11 invoice to extract CreatedAt. Some mints (e.g. testnut
+	// FakeWallet) return non-standard request strings that fail bolt11 parsing.
+	// In that case, fall back to current time so the quote can still be stored.
+	createdAt := time.Now().Unix()
+	if bolt11, err := decodepay.Decodepay(mintResponse.Request); err == nil {
+		createdAt = int64(bolt11.CreatedAt)
 	}
 
 	quote := storage.MintQuote{
@@ -282,7 +285,7 @@ func (w *Wallet) RequestMint(amount uint64, mint string) (*nut04.PostMintQuoteBo
 		Unit:           w.unit.String(),
 		Amount:         amount,
 		PaymentRequest: mintResponse.Request,
-		CreatedAt:      int64(bolt11.CreatedAt),
+		CreatedAt:      createdAt,
 		QuoteExpiry:    mintResponse.Expiry,
 		PrivateKey:     privateKey,
 	}
