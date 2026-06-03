@@ -269,9 +269,12 @@ func (w *Wallet) RequestMint(amount uint64, mint string) (*nut04.PostMintQuoteBo
 		return nil, err
 	}
 
+	var createdAt int64
 	bolt11, err := decodepay.Decodepay(mintResponse.Request)
 	if err != nil {
-		return nil, fmt.Errorf("error decoding bolt11 invoice: %v", err)
+		createdAt = time.Now().Unix()
+	} else {
+		createdAt = int64(bolt11.CreatedAt)
 	}
 
 	quote := storage.MintQuote{
@@ -282,7 +285,7 @@ func (w *Wallet) RequestMint(amount uint64, mint string) (*nut04.PostMintQuoteBo
 		Unit:           w.unit.String(),
 		Amount:         amount,
 		PaymentRequest: mintResponse.Request,
-		CreatedAt:      int64(bolt11.CreatedAt),
+		CreatedAt:      createdAt,
 		QuoteExpiry:    mintResponse.Expiry,
 		PrivateKey:     privateKey,
 	}
