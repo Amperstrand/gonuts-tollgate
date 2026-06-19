@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/Origami74/gonuts-tollgate/cashu"
@@ -176,6 +177,15 @@ func PostSwap(mintURL string, swapRequest nut03.PostSwapRequest) (*nut03.PostSwa
 		return nil, fmt.Errorf("json.Marshal: %v", err)
 	}
 
+	// DEBUG: log keyset ID lengths to diagnose V2 keyset swap failures
+	for i, input := range swapRequest.Inputs {
+		log.Printf("DEBUG swap input[%d]: id=%q len(hex)=%d len(bytes)=%d", i, input.Id, len(input.Id), len(input.Id)/2)
+	}
+	for i, output := range swapRequest.Outputs {
+		log.Printf("DEBUG swap output[%d]: id=%q len(hex)=%d len(bytes)=%d", i, output.Id, len(output.Id), len(output.Id)/2)
+	}
+	log.Printf("DEBUG swap request body (first 500 chars): %s", string(requestBody[:min(500, len(requestBody))]))
+
 	resp, err := httpPost(mintURL+"/v1/swap", "application/json", bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil, err
@@ -185,6 +195,10 @@ func PostSwap(mintURL string, swapRequest nut03.PostSwapRequest) (*nut03.PostSwa
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		log.Printf("DEBUG swap HTTP %d response: %s", resp.StatusCode, string(body[:min(500, len(body))]))
 	}
 
 	var swapResponse nut03.PostSwapResponse
