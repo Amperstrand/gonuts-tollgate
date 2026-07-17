@@ -626,7 +626,7 @@ func (w *Wallet) Receive(token cashu.Token, swapToTrusted bool) (uint64, error) 
 		mint := &walletMint{mintURL: tokenMint, activeKeyset: *keyset, inactiveKeysets: inactiveKeysets}
 		amountSwapped, err := w.swapToTrusted(proofsToSwap, mint)
 		if err != nil {
-			return 0, fmt.Errorf("error swapping token to trusted mint: %v", err)
+			return 0, fmt.Errorf("error swapping token to trusted mint: %w", err)
 		}
 		return amountSwapped, nil
 	} else {
@@ -653,16 +653,16 @@ func (w *Wallet) Receive(token cashu.Token, swapToTrusted bool) (uint64, error) 
 			}
 		}
 
-		newProofs, err := swap(tokenMint, req)
-		if err != nil {
-			return 0, fmt.Errorf("could not swap proofs: %v", err)
-		}
-
 		w.mu.Lock()
 		defer w.mu.Unlock()
 
 		if err = w.db.IncrementKeysetCounter(req.keyset.Id, uint32(len(req.outputs))); err != nil {
 			return 0, fmt.Errorf("error incrementing keyset counter: %v", err)
+		}
+
+		newProofs, err := w.swapWithRetry(tokenMint, req, proofsToSwap, &mint, nut10Secret)
+		if err != nil {
+			return 0, fmt.Errorf("could not swap proofs: %w", err)
 		}
 
 		if err := w.db.SaveProofs(newProofs); err != nil {
@@ -720,14 +720,14 @@ func (w *Wallet) ReceiveHTLC(token cashu.Token, preimage string) (uint64, error)
 			}
 		}
 
-		newProofs, err := swap(tokenMint, req)
-		if err != nil {
-			return 0, fmt.Errorf("could not swap proofs: %v", err)
-		}
-
 		err = w.db.IncrementKeysetCounter(req.keyset.Id, uint32(len(req.outputs)))
 		if err != nil {
 			return 0, fmt.Errorf("error incrementing keyset counter: %v", err)
+		}
+
+		newProofs, err := w.swapWithRetry(tokenMint, req, proofs, &mint, nut10Secret)
+		if err != nil {
+			return 0, fmt.Errorf("could not swap proofs: %w", err)
 		}
 
 		if err := w.db.SaveProofs(newProofs); err != nil {
@@ -767,7 +767,8 @@ func (w *Wallet) createSwapRequest(proofs cashu.Proofs, mint *walletMint) (swapR
 	}, nil
 }
 
-func swap(mint string, swapRequest swapRequestPayload) (cashu.Proofs, error) {
+// swap is declared as a variable so tests can override it.
+var swap = func(mint string, swapRequest swapRequestPayload) (cashu.Proofs, error) {
 	request := nut03.PostSwapRequest{
 		Inputs:  swapRequest.inputs,
 		Outputs: swapRequest.outputs,
@@ -792,6 +793,36 @@ func swap(mint string, swapRequest swapRequestPayload) (cashu.Proofs, error) {
 	return proofs, nil
 }
 
+// swapWithRetry calls swap() and retries once with fresh blinded messages
+// if the mint returns a "blinded message already signed" error.
+func (w *Wallet) swapWithRetry(
+	mintURL string,
+	req swapRequestPayload,
+	proofs cashu.Proofs,
+	mint *walletMint,
+	nut10Secret nut10.WellKnownSecret,
+) (cashu.Proofs, error) {
+	newProofs, err := swap(mintURL, req)
+	if err != nil {
+		var cashuErr cashu.Error
+		if errors.As(err, &cashuErr) && cashuErr.Code == cashu.BlindedMessageAlreadySignedErrCode {
+			req, err = w.createSwapRequest(proofs, mint)
+			if err != nil {
+				return nil, fmt.Errorf("could not create retry swap request: %w", err)
+			}
+			if nut10Secret.Kind == nut10.P2PK && nut11.IsSigAll(nut10Secret) {
+				req.outputs, err = nut11.AddSignatureToOutputs(req.outputs, w.privateKey)
+				if err != nil {
+					return nil, fmt.Errorf("error signing outputs on retry: %w", err)
+				}
+			}
+			return swap(mintURL, req)
+		}
+		return nil, err
+	}
+	return newProofs, nil
+}
+
 // swapToTrusted will swap the proofs from mint
 // to the wallet's configured default mint
 func (w *Wallet) swapToTrusted(proofs cashu.Proofs, mint *walletMint) (uint64, error) {
@@ -811,7 +842,7 @@ func (w *Wallet) swapToTrusted(proofs cashu.Proofs, mint *walletMint) (uint64, e
 
 		newProofs, err := swap(mint.mintURL, req)
 		if err != nil {
-			return 0, fmt.Errorf("could not swap proofs: %v", err)
+			return 0, fmt.Errorf("could not swap proofs: %w", err)
 		}
 		proofsToSwap = newProofs
 	}
@@ -2119,13 +2150,13 @@ func (w *Wallet) ReclaimUnspentProofs() (uint64, error) {
 			if err != nil {
 				return 0, fmt.Errorf("could not create swap request: %v", err)
 			}
-			newProofs, err := swap(mintURL, req)
-			if err != nil {
-				return 0, fmt.Errorf("could not swap proofs: %v", err)
-			}
 			err = w.db.IncrementKeysetCounter(req.keyset.Id, uint32(len(req.outputs)))
 			if err != nil {
 				return 0, fmt.Errorf("error incrementing keyset counter: %v", err)
+			}
+			newProofs, err := swap(mintURL, req)
+			if err != nil {
+				return 0, fmt.Errorf("could not swap proofs: %w", err)
 			}
 			if err := w.db.SaveProofs(newProofs); err != nil {
 				return 0, fmt.Errorf("error storing proofs: %v", err)
