@@ -2,6 +2,8 @@ package nut12
 
 import (
 	"encoding/hex"
+	"fmt"
+	"sync"
 
 	"github.com/Origami74/gonuts-tollgate/cashu"
 	"github.com/Origami74/gonuts-tollgate/crypto"
@@ -26,6 +28,90 @@ func VerifyProofsDLEQ(proofs cashu.Proofs, keyset crypto.WalletKeyset) bool {
 		}
 	}
 	return true
+}
+
+// keysetFetcher is a function that returns the public keys for a given keyset ID.
+type keysetFetcher func(keysetID string) (crypto.PublicKeys, error)
+
+// VerifyProofsDLEQWithKeysets verifies DLEQ proofs using the correct keyset
+// for each proof, looked up by proof.Id. This handles mints that have rotated
+// keysets — the active keyset may differ from the keyset that signed the proof.
+// If a proof has no DLEQ proof, it is skipped (returns true for that proof).
+// If keysetFetcher is nil, falls back to verifying all proofs against the
+// provided activeKeyset (legacy behavior).
+func VerifyProofsDLEQWithKeysets(proofs cashu.Proofs, activeKeyset crypto.WalletKeyset, fetcher keysetFetcher) (bool, error) {
+	if fetcher == nil {
+		return VerifyProofsDLEQ(proofs, activeKeyset), nil
+	}
+
+	// Group proofs by keyset ID to minimize mint API calls.
+	proofsByKeyset := make(map[string]cashu.Proofs)
+	for _, proof := range proofs {
+		if proof.DLEQ == nil {
+			continue
+		}
+		proofsByKeyset[proof.Id] = append(proofsByKeyset[proof.Id], proof)
+	}
+
+	// No DLEQ proofs to verify.
+	if len(proofsByKeyset) == 0 {
+		return true, nil
+	}
+
+	// Fetch keysets and verify concurrently.
+	type result struct {
+		valid bool
+		err   error
+	}
+
+	var mu sync.Mutex
+	var firstErr error
+	allValid := true
+
+	var wg sync.WaitGroup
+	for keysetID, keysetProofs := range proofsByKeyset {
+		wg.Add(1)
+		go func(id string, prfs cashu.Proofs) {
+			defer wg.Done()
+
+			var pubkeys crypto.PublicKeys
+			var err error
+
+			if id == activeKeyset.Id {
+				// Use the active keyset we already have.
+				pubkeys = activeKeyset.PublicKeys
+			} else {
+				// Fetch the historical keyset that signed these proofs.
+				pubkeys, err = fetcher(id)
+				if err != nil {
+					mu.Lock()
+					if firstErr == nil {
+						firstErr = fmt.Errorf("failed to fetch keyset %s: %v", id, err)
+					}
+					allValid = false
+					mu.Unlock()
+					return
+				}
+			}
+
+			valid := VerifyProofsDLEQ(prfs, crypto.WalletKeyset{
+				Id:         id,
+				PublicKeys: pubkeys,
+			})
+
+			if !valid {
+				mu.Lock()
+				allValid = false
+				mu.Unlock()
+			}
+		}(keysetID, keysetProofs)
+	}
+	wg.Wait()
+
+	if firstErr != nil {
+		return false, firstErr
+	}
+	return allValid, nil
 }
 
 func VerifyProofDLEQ(
