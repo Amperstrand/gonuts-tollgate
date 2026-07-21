@@ -1,6 +1,7 @@
 package nut13
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 
@@ -13,8 +14,13 @@ func DeriveKeysetPath(master *hdkeychain.ExtendedKey, keysetId string) (*hdkeych
 	if err != nil {
 		return nil, err
 	}
-	bigEndianBytes := binary.BigEndian.Uint64(keysetBytes)
-	keysetIdInt := bigEndianBytes % (1<<31 - 1)
+	var keysetIdInt uint64
+	if len(keysetBytes) <= 8 {
+		keysetIdInt = binary.BigEndian.Uint64(keysetBytes) % (1<<31 - 1)
+	} else {
+		h := sha256.Sum256(keysetBytes)
+		keysetIdInt = binary.BigEndian.Uint64(h[:8]) % (1<<31 - 1)
+	}
 
 	// m/129372
 	purpose, err := master.Derive(hdkeychain.HardenedKeyStart + 129372)
