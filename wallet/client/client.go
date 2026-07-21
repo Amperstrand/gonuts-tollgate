@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/Origami74/gonuts-tollgate/cashu"
 	"github.com/Origami74/gonuts-tollgate/cashu/nuts/nut01"
@@ -18,14 +19,20 @@ import (
 	"github.com/Origami74/gonuts-tollgate/cashu/nuts/nut09"
 )
 
+const maxResponseBytes = 1 << 20
+
+func normalizeMintURL(mintURL string) string {
+	return strings.TrimRight(mintURL, "/")
+}
+
 func GetMintInfo(mintURL string) (*nut06.MintInfo, error) {
-	resp, err := get(mintURL + "/v1/info")
+	resp, err := get(normalizeMintURL(mintURL) + "/v1/info")
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return nil, err
 	}
@@ -39,13 +46,13 @@ func GetMintInfo(mintURL string) (*nut06.MintInfo, error) {
 }
 
 func GetActiveKeysets(mintURL string) (*nut01.GetKeysResponse, error) {
-	resp, err := get(mintURL + "/v1/keys")
+	resp, err := get(normalizeMintURL(mintURL) + "/v1/keys")
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return nil, err
 	}
@@ -59,13 +66,13 @@ func GetActiveKeysets(mintURL string) (*nut01.GetKeysResponse, error) {
 }
 
 func GetAllKeysets(mintURL string) (*nut02.GetKeysetsResponse, error) {
-	resp, err := get(mintURL + "/v1/keysets")
+	resp, err := get(normalizeMintURL(mintURL) + "/v1/keysets")
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return nil, err
 	}
@@ -79,13 +86,13 @@ func GetAllKeysets(mintURL string) (*nut02.GetKeysetsResponse, error) {
 }
 
 func GetKeysetById(mintURL, id string) (*nut01.GetKeysResponse, error) {
-	resp, err := get(mintURL + "/v1/keys/" + id)
+	resp, err := get(normalizeMintURL(mintURL) + "/v1/keys/" + id)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return nil, err
 	}
@@ -105,13 +112,13 @@ func PostMintQuoteBolt11(mintURL string, mintQuoteRequest nut04.PostMintQuoteBol
 		return nil, fmt.Errorf("json.Marshal: %v", err)
 	}
 
-	resp, err := httpPost(mintURL+"/v1/mint/quote/bolt11", "application/json", bytes.NewBuffer(requestBody))
+	resp, err := httpPost(normalizeMintURL(mintURL)+"/v1/mint/quote/bolt11", "application/json", bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return nil, err
 	}
@@ -125,13 +132,13 @@ func PostMintQuoteBolt11(mintURL string, mintQuoteRequest nut04.PostMintQuoteBol
 }
 
 func GetMintQuoteState(mintURL, quoteId string) (*nut04.PostMintQuoteBolt11Response, error) {
-	resp, err := get(mintURL + "/v1/mint/quote/bolt11/" + quoteId)
+	resp, err := get(normalizeMintURL(mintURL) + "/v1/mint/quote/bolt11/" + quoteId)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return nil, err
 	}
@@ -151,13 +158,13 @@ func PostMintBolt11(mintURL string, mintRequest nut04.PostMintBolt11Request) (
 		return nil, fmt.Errorf("json.Marshal: %v", err)
 	}
 
-	resp, err := httpPost(mintURL+"/v1/mint/bolt11", "application/json", bytes.NewBuffer(requestBody))
+	resp, err := httpPost(normalizeMintURL(mintURL)+"/v1/mint/bolt11", "application/json", bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return nil, err
 	}
@@ -176,13 +183,13 @@ func PostSwap(mintURL string, swapRequest nut03.PostSwapRequest) (*nut03.PostSwa
 		return nil, fmt.Errorf("json.Marshal: %v", err)
 	}
 
-	resp, err := httpPost(mintURL+"/v1/swap", "application/json", bytes.NewBuffer(requestBody))
+	resp, err := httpPost(normalizeMintURL(mintURL)+"/v1/swap", "application/json", bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return nil, err
 	}
@@ -203,13 +210,13 @@ func PostMeltQuoteBolt11(mintURL string, meltQuoteRequest nut05.PostMeltQuoteBol
 		return nil, fmt.Errorf("json.Marshal: %v", err)
 	}
 
-	resp, err := httpPost(mintURL+"/v1/melt/quote/bolt11", "application/json", bytes.NewBuffer(requestBody))
+	resp, err := httpPost(normalizeMintURL(mintURL)+"/v1/melt/quote/bolt11", "application/json", bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return nil, err
 	}
@@ -223,13 +230,13 @@ func PostMeltQuoteBolt11(mintURL string, meltQuoteRequest nut05.PostMeltQuoteBol
 }
 
 func GetMeltQuoteState(mintURL, quoteId string) (*nut05.PostMeltQuoteBolt11Response, error) {
-	resp, err := get(mintURL + "/v1/melt/quote/bolt11/" + quoteId)
+	resp, err := get(normalizeMintURL(mintURL) + "/v1/melt/quote/bolt11/" + quoteId)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return nil, err
 	}
@@ -250,13 +257,13 @@ func PostMeltBolt11(mintURL string, meltRequest nut05.PostMeltBolt11Request) (
 		return nil, fmt.Errorf("json.Marshal: %v", err)
 	}
 
-	resp, err := httpPost(mintURL+"/v1/melt/bolt11", "application/json", bytes.NewBuffer(requestBody))
+	resp, err := httpPost(normalizeMintURL(mintURL)+"/v1/melt/bolt11", "application/json", bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return nil, err
 	}
@@ -277,13 +284,13 @@ func PostCheckProofState(mintURL string, stateRequest nut07.PostCheckStateReques
 		return nil, fmt.Errorf("json.Marshal: %v", err)
 	}
 
-	resp, err := httpPost(mintURL+"/v1/checkstate", "application/json", bytes.NewBuffer(requestBody))
+	resp, err := httpPost(normalizeMintURL(mintURL)+"/v1/checkstate", "application/json", bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return nil, err
 	}
@@ -304,13 +311,13 @@ func PostRestore(mintURL string, restoreRequest nut09.PostRestoreRequest) (
 		return nil, fmt.Errorf("json.Marshal: %v", err)
 	}
 
-	resp, err := httpPost(mintURL+"/v1/restore", "application/json", bytes.NewBuffer(requestBody))
+	resp, err := httpPost(normalizeMintURL(mintURL)+"/v1/restore", "application/json", bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return nil, err
 	}
@@ -344,7 +351,7 @@ func httpPost(url, contentType string, body io.Reader) (*http.Response, error) {
 func parse(response *http.Response) (*http.Response, error) {
 	if response.StatusCode == 400 {
 		var errResponse cashu.Error
-		err := json.NewDecoder(response.Body).Decode(&errResponse)
+		err := json.NewDecoder(io.LimitReader(response.Body, maxResponseBytes)).Decode(&errResponse)
 		if err != nil {
 			return nil, fmt.Errorf("could not decode error response from mint: %v", err)
 		}
@@ -352,7 +359,7 @@ func parse(response *http.Response) (*http.Response, error) {
 	}
 
 	if response.StatusCode != 200 {
-		body, err := io.ReadAll(response.Body)
+		body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))
 		if err != nil {
 			return nil, err
 		}
