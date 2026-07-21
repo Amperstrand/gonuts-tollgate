@@ -595,8 +595,15 @@ func (w *Wallet) Receive(token cashu.Token, swapToTrusted bool) (uint64, error) 
 		return 0, fmt.Errorf("could not get active keyset: %v", err)
 	}
 
-	// verify DLEQ in proofs if present
-	if !nut12.VerifyProofsDLEQ(proofsToSwap, *keyset) {
+	// verify DLEQ in proofs if present, using the correct keyset per proof.Id
+	// to handle mints that have rotated keysets since the token was minted.
+	valid, dleqErr := nut12.VerifyProofsDLEQWithKeysets(proofsToSwap, *keyset, func(keysetID string) (crypto.PublicKeys, error) {
+		return GetKeysetKeys(tokenMint, keysetID)
+	})
+	if dleqErr != nil {
+		return 0, fmt.Errorf("could not verify DLEQ proof: %v", dleqErr)
+	}
+	if !valid {
 		return 0, errors.New("invalid DLEQ proof")
 	}
 
@@ -683,8 +690,14 @@ func (w *Wallet) ReceiveHTLC(token cashu.Token, preimage string) (uint64, error)
 	if err != nil {
 		return 0, fmt.Errorf("could not get active keyset: %v", err)
 	}
-	// verify DLEQ in proofs if present
-	if !nut12.VerifyProofsDLEQ(proofs, *keyset) {
+	// verify DLEQ in proofs if present, using the correct keyset per proof.Id
+	valid, dleqErr := nut12.VerifyProofsDLEQWithKeysets(proofs, *keyset, func(keysetID string) (crypto.PublicKeys, error) {
+		return GetKeysetKeys(tokenMint, keysetID)
+	})
+	if dleqErr != nil {
+		return 0, fmt.Errorf("could not verify DLEQ proof: %v", dleqErr)
+	}
+	if !valid {
 		return 0, errors.New("invalid DLEQ proof")
 	}
 
