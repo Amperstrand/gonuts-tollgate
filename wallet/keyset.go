@@ -14,7 +14,7 @@ import (
 func GetMintActiveKeyset(mintURL string, unit cashu.Unit) (*crypto.WalletKeyset, error) {
 	keysets, err := client.GetAllKeysets(mintURL)
 	if err != nil {
-		return nil, fmt.Errorf("error getting active keysets from mint: %v", err)
+		return nil, fmt.Errorf("error getting active keysets from mint: %w", err)
 	}
 
 	for _, keyset := range keysets.Keysets {
@@ -23,7 +23,7 @@ func GetMintActiveKeyset(mintURL string, unit cashu.Unit) (*crypto.WalletKeyset,
 			if err == nil {
 				keys, err := GetKeysetKeys(mintURL, keyset.Id)
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("error getting keyset keys: %w", err)
 				}
 				return &crypto.WalletKeyset{
 					Id:          keyset.Id,
@@ -43,7 +43,7 @@ func GetMintActiveKeyset(mintURL string, unit cashu.Unit) (*crypto.WalletKeyset,
 func GetMintInactiveKeysets(mintURL string, unit cashu.Unit) (map[string]crypto.WalletKeyset, error) {
 	keysetsResponse, err := client.GetAllKeysets(mintURL)
 	if err != nil {
-		return nil, fmt.Errorf("error getting keysets from mint: %v", err)
+		return nil, fmt.Errorf("error getting keysets from mint: %w", err)
 	}
 
 	inactiveKeysets := make(map[string]crypto.WalletKeyset)
@@ -66,7 +66,7 @@ func GetMintInactiveKeysets(mintURL string, unit cashu.Unit) (map[string]crypto.
 func GetKeysetKeys(mintURL, id string) (crypto.PublicKeys, error) {
 	keysetsResponse, err := client.GetKeysetById(mintURL, id)
 	if err != nil {
-		return nil, fmt.Errorf("error getting keyset from mint: %v", err)
+		return nil, fmt.Errorf("error getting keyset from mint: %w", err)
 	}
 
 	keyset := keysetsResponse.Keysets[0]
@@ -75,7 +75,7 @@ func GetKeysetKeys(mintURL, id string) (crypto.PublicKeys, error) {
 	if crypto.IsKeysetIdV2(id) {
 		unit, inputFeePpk, err := getKeysetMetadata(mintURL, id)
 		if err != nil {
-			return nil, fmt.Errorf("error getting keyset metadata: %v", err)
+			return nil, fmt.Errorf("error getting keyset metadata: %w", err)
 		}
 		derivedId = crypto.DeriveKeysetIdV2(keyset.Keys, unit, inputFeePpk)
 	} else {
