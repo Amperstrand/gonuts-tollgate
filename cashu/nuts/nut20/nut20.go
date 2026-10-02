@@ -2,8 +2,6 @@ package nut20
 
 import (
 	"crypto/sha256"
-	"encoding/binary"
-	"encoding/hex"
 
 	"github.com/OpenTollGate/gonuts-tollgate/cashu"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -12,49 +10,23 @@ import (
 
 // NUT #20: This NUT defines signature-based authentication for mint quote redemption.
 
-// buildMessageToSign constructs the NUT-20 binary message format:
-// b"Cashu_MintQuoteSig_v1" || len32(quote) || quote || for each output: len32(amount) || amount || len32(B) || B
+// buildMessageToSign constructs the NUT-20 spec message:
+// quote_id || hex(B_) of each output, concatenated in request order.
+//
+// This is the format cdk mints verify (cashubtc/cdk nut20.rs
+// legacy_mint_quote_msg_to_sign), accepted both by cdk versions that predate
+// the domain-separated variant and by newer ones via their legacy fallback.
+// The domain-separated "Cashu_MintQuoteSig_v1" framing is NOT understood by
+// cdk mints currently deployed (verified against testnut.cashu.space:
+// spec format mints, domain-separated is rejected with
+// "Signature missing or invalid").
 func buildMessageToSign(quoteId string, blindedMessages cashu.BlindedMessages) []byte {
 	var msg []byte
-	msg = append(msg, []byte("Cashu_MintQuoteSig_v1")...)
-
-	quoteBytes := []byte(quoteId)
-	var lenBuf [4]byte
-	binary.BigEndian.PutUint32(lenBuf[:], uint32(len(quoteBytes)))
-	msg = append(msg, lenBuf[:]...)
-	msg = append(msg, quoteBytes...)
-
+	msg = append(msg, quoteId...)
 	for _, bm := range blindedMessages {
-		amountBytes := canonicalAmountBytes(bm.Amount)
-		binary.BigEndian.PutUint32(lenBuf[:], uint32(len(amountBytes)))
-		msg = append(msg, lenBuf[:]...)
-		msg = append(msg, amountBytes...)
-
-		bBytes, err := hex.DecodeString(bm.B_)
-		if err != nil {
-			bBytes = []byte(bm.B_)
-		}
-		binary.BigEndian.PutUint32(lenBuf[:], uint32(len(bBytes)))
-		msg = append(msg, lenBuf[:]...)
-		msg = append(msg, bBytes...)
+		msg = append(msg, bm.B_...)
 	}
-
 	return msg
-}
-
-// canonicalAmountBytes converts an amount to minimal big-endian bytes (NUT-20 spec).
-func canonicalAmountBytes(amount uint64) []byte {
-	if amount == 0 {
-		return []byte{}
-	}
-	var buf [8]byte
-	binary.BigEndian.PutUint64(buf[:], amount)
-	for i := 0; i < 8; i++ {
-		if buf[i] != 0 {
-			return buf[i:]
-		}
-	}
-	return buf[:]
 }
 
 func SignMintQuote(

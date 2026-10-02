@@ -103,29 +103,9 @@ func TestVerifyMintQuoteSignature(t *testing.T) {
 }
 
 func TestBuildMessageToSign(t *testing.T) {
-	msg := buildMessageToSign("test", cashu.BlindedMessages{})
-	expected := []byte("Cashu_MintQuoteSig_v1")
-	if string(msg[:len(expected)]) != string(expected) {
-		t.Fatalf("domain separator wrong: got %q", string(msg[:len(expected)]))
-	}
-}
-
-func TestCanonicalAmountBytes(t *testing.T) {
-	tests := []struct {
-		amount uint64
-		want   int
-	}{
-		{0, 0},
-		{1, 1},
-		{255, 1},
-		{256, 2},
-		{65535, 2},
-		{65536, 3},
-	}
-	for _, tt := range tests {
-		got := canonicalAmountBytes(tt.amount)
-		if len(got) != tt.want {
-			t.Errorf("canonicalAmountBytes(%d) length = %d, want %d", tt.amount, len(got), tt.want)
-		}
+	msg := buildMessageToSign("testquote", cashu.BlindedMessages{{Amount: 1, B_: "aa"}, {Amount: 2, B_: "bb"}})
+	want := []byte("testquoteaabb")
+	if string(msg) != string(want) {
+		t.Fatalf("message = %q, want %q (quote id || concatenated B_ hex)", msg, want)
 	}
 }
