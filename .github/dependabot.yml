@@ -1,0 +1,14 @@
+# 2026-11-14 fleet rollout (owner decision, green-PR interview): updates
+# arrive GROUPED weekly instead of per-package PR streams — ends the
+# dependabot churn class behind the 40-PR backlog the fleet review triaged.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      go-dependencies:
+        patterns: ["*"]
+    commit-message:
+      prefix: "build(deps)"
